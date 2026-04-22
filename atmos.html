@@ -1,0 +1,1806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Atmos - Weather</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0b0f1a;
+  --surface: rgba(255,255,255,0.04);
+  --surface2: rgba(255,255,255,0.07);
+  --border: rgba(255,255,255,0.10);
+  --text: #e8edf8;
+  --muted: rgba(232,237,248,0.45);
+  --accent: #4fc3f7;
+  --accent2: #f06292;
+  --accent3: #81c784;
+  --accent4: #ffb74d;
+  --glow: rgba(79,195,247,0.18);
+  --danger: #ef5350;
+  --success: #66bb6a;
+}
+
+body {
+  font-family: 'Space Grotesk', sans-serif;
+  min-height: 100vh;
+  color: var(--text);
+  background: var(--bg);
+  background-image:
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(79,195,247,0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 90%, rgba(240,98,146,0.05) 0%, transparent 50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px 16px 80px;
+}
+
+/* NAV */
+.nav {
+  width: 100%;
+  max-width: 960px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 48px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.brand { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
+.brand span { color: var(--accent); }
+.nav-tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 40px; padding: 4px; flex-wrap: wrap; }
+.tab {
+  padding: 7px 18px;
+  border-radius: 40px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--muted);
+  transition: all 0.2s;
+  letter-spacing: 0.3px;
+}
+.tab.active { background: var(--accent); color: #0b0f1a; }
+
+/* VIEWS */
+.view { display: none; width: 100%; max-width: 960px; }
+.view.active { display: block; }
+
+/* WEATHER VIEW */
+.weather-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+/* SEARCH */
+.search-panel {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+input[type="text"], input[type="email"], input[type="password"], input[type="date"], input[type="tel"], select {
+  flex: 1; min-width: 140px;
+  padding: 10px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 40px;
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.88rem;
+  outline: none;
+  transition: border 0.25s, box-shadow 0.25s;
+}
+input[type="text"]::placeholder,
+input[type="email"]::placeholder,
+input[type="password"]::placeholder,
+input[type="tel"]::placeholder { color: var(--muted); }
+input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus,
+input[type="date"]:focus, input[type="tel"]:focus, select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--glow);
+}
+input.input-error { border-color: var(--danger) !important; box-shadow: 0 0 0 3px rgba(239,83,80,0.15) !important; }
+input.input-ok { border-color: var(--success) !important; }
+
+select option { background: #151b2e; }
+button {
+  padding: 10px 20px;
+  border-radius: 40px;
+  border: 1px solid var(--border);
+  background: rgba(79,195,247,0.12);
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+button:hover { background: rgba(79,195,247,0.24); transform: translateY(-1px); }
+button.primary { background: var(--accent); color: #0b0f1a; border-color: var(--accent); }
+button.primary:hover { background: #81d4fa; }
+
+/* UNIT TOGGLE */
+.unit-row { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--muted); }
+.unit-row span { cursor: pointer; font-weight: 600; transition: color 0.2s; }
+.unit-row span.on { color: var(--text); }
+.pill { width: 40px; height: 20px; background: var(--surface2); border: 1px solid var(--border); border-radius: 40px; position: relative; cursor: pointer; }
+.pill::after { content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; background: var(--accent); border-radius: 50%; transition: transform 0.3s; }
+.pill.f::after { transform: translateX(19px); }
+
+/* CARD */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 28px;
+  backdrop-filter: blur(20px);
+  position: relative;
+  overflow: hidden;
+}
+.card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(79,195,247,0.4), transparent);
+}
+.card.full { grid-column: 1 / -1; }
+
+/* WEATHER OUTPUT */
+.city-name { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.5px; }
+.country { font-size: 0.68rem; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 18px; margin-top: 2px; }
+.temp-row { display: flex; align-items: center; gap: 12px; }
+.temp-row img { width: 64px; height: 64px; filter: drop-shadow(0 0 12px rgba(79,195,247,0.5)); }
+.big-temp { font-size: 4.5rem; font-weight: 700; letter-spacing: -3px; line-height: 1; font-family: 'DM Mono', monospace; }
+.unit-sym { font-size: 1.8rem; font-weight: 300; color: var(--muted); align-self: flex-start; margin-top: 8px; }
+.desc { font-size: 0.9rem; color: var(--muted); text-transform: capitalize; margin-top: 8px; }
+.feels { font-size: 0.75rem; color: var(--muted); margin-top: 3px; font-family: 'DM Mono', monospace; }
+
+/* STATS — legacy fallback kept, React component overrides */
+.stat { background: var(--surface2); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 10px; text-align: center; }
+.stat-label { font-size: 0.6rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.stat-val { font-size: 1.1rem; font-weight: 600; font-family: 'DM Mono', monospace; }
+.stat-unit { font-size: 0.6rem; color: var(--muted); margin-top: 2px; }
+hr { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+
+/* REACT STATS PANEL */
+#react-stats-root { margin-top: 20px; }
+
+.rs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.rs-tile {
+  background: var(--surface2);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  padding: 14px 10px 10px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.4s, box-shadow 0.4s;
+  cursor: default;
+}
+.rs-tile:hover {
+  border-color: rgba(255,255,255,0.18);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+.rs-tile-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  opacity: 0;
+  transition: opacity 0.4s;
+  pointer-events: none;
+}
+.rs-tile:hover .rs-tile-glow { opacity: 1; }
+
+.rs-ring-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.rs-ring {
+  transform: rotate(-90deg);
+  overflow: visible;
+}
+.rs-ring-track { fill: none; stroke: rgba(255,255,255,0.07); }
+.rs-ring-fill {
+  fill: none;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.9s cubic-bezier(.22,1,.36,1), stroke 0.4s;
+}
+.rs-label {
+  font-size: 0.58rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+.rs-val {
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-family: 'DM Mono', monospace;
+  line-height: 1;
+  transition: color 0.4s;
+}
+.rs-unit { font-size: 0.58rem; color: var(--muted); margin-top: 3px; }
+
+/* sun row */
+.rs-sun-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+.rs-sun-tile {
+  background: var(--surface2);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rs-sun-icon { font-size: 1.4rem; line-height: 1; }
+.rs-sun-label { font-size: 0.58rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+.rs-sun-time { font-size: 0.95rem; font-weight: 700; font-family: 'DM Mono', monospace; margin-top: 2px; }
+
+/* wind compass */
+.rs-compass-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 48px;
+  margin-bottom: 6px;
+}
+.rs-compass {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,0.1);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rs-compass-arrow {
+  position: absolute;
+  width: 2px;
+  height: 16px;
+  border-radius: 2px;
+  background: linear-gradient(to bottom, #4fc3f7, transparent);
+  top: 6px;
+  left: calc(50% - 1px);
+  transform-origin: bottom center;
+  transition: transform 0.8s cubic-bezier(.22,1,.36,1);
+}
+.rs-compass-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+@keyframes rsCountUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.rs-val-enter { animation: rsCountUp 0.35s ease forwards; }
+
+/* LOADER/ERROR */
+.loader { display: none; text-align: center; padding: 50px 0; }
+.loader.show { display: block; }
+.spinner { display: inline-block; width: 36px; height: 36px; border: 2px solid rgba(79,195,247,0.15); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+.loader p { color: var(--muted); font-size: 0.82rem; margin-top: 12px; }
+.error { display: none; text-align: center; padding: 40px 0; color: #ef5350; }
+.error.show { display: block; }
+.error strong { display: block; font-size: 1.1rem; margin-bottom: 4px; }
+.output { display: none; }
+.output.show { display: block; }
+
+/* === GAPMINDER PANEL === */
+.gap-header { margin-bottom: 24px; }
+.gap-header h2 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.4px; }
+.gap-header p { font-size: 0.82rem; color: var(--muted); margin-top: 4px; }
+
+.gap-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+  align-items: flex-end;
+}
+.ctrl-group { display: flex; flex-direction: column; gap: 5px; }
+.ctrl-group label { font-size: 0.68rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+.ctrl-group select, .ctrl-group input[type="range"], .ctrl-group input[type="number"] {
+  min-width: 0;
+  border-radius: 8px;
+}
+input[type="range"] {
+  -webkit-appearance: none;
+  height: 4px;
+  background: var(--border);
+  border-radius: 4px;
+  outline: none;
+  border: none;
+  padding: 0;
+  width: 140px;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px; height: 14px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+}
+input[type="number"] {
+  width: 100px;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+.range-val { font-size: 0.75rem; font-family: 'DM Mono', monospace; color: var(--accent); text-align: right; }
+
+#chart-container {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+#chart-container::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(79,195,247,0.3), transparent);
+}
+
+.chart-tooltip {
+  position: fixed;
+  background: rgba(11,15,26,0.95);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 0.8rem;
+  pointer-events: none;
+  z-index: 1000;
+  display: none;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  min-width: 160px;
+}
+.tooltip-city { font-weight: 700; font-size: 0.9rem; margin-bottom: 6px; }
+.tooltip-row { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); margin-top: 2px; }
+.tooltip-row span:last-child { color: var(--text); font-family: 'DM Mono', monospace; font-weight: 500; }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+}
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--muted); cursor: pointer; transition: color 0.2s; }
+.legend-item:hover { color: var(--text); }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+/* CITY JSON VIEW */
+.json-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+.city-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.city-card::after {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  border-radius: 16px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.city-card:hover { transform: translateY(-2px); background: var(--surface2); }
+.city-card:hover::after { opacity: 1; }
+.city-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+.city-card-name { font-weight: 700; font-size: 1rem; }
+.city-card-country { font-size: 0.65rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+.city-badge { font-size: 0.65rem; font-family: 'DM Mono', monospace; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; color: var(--muted); }
+.city-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.cs { background: var(--surface2); border-radius: 8px; padding: 8px; text-align: center; }
+.cs-label { font-size: 0.58rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.cs-val { font-size: 0.9rem; font-weight: 600; font-family: 'DM Mono', monospace; margin-top: 2px; }
+.pop-bar { height: 3px; background: var(--border); border-radius: 3px; margin-top: 8px; overflow: hidden; }
+.pop-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 3px; transition: width 0.8s cubic-bezier(.22,1,.36,1); }
+
+/* JSON FILTER */
+.json-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+  align-items: flex-end;
+}
+.json-filters .ctrl-group { flex: 1; min-width: 160px; }
+
+/* ============================================================
+   REGISTRATION VIEW
+   ============================================================ */
+#view-register {
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.reg-header { text-align: center; margin-bottom: 36px; }
+.reg-header h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.8px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.reg-header p { font-size: 0.85rem; color: var(--muted); margin-top: 6px; }
+
+.reg-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 36px;
+  backdrop-filter: blur(20px);
+  position: relative;
+  overflow: hidden;
+}
+.reg-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), var(--accent2), transparent);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.form-group.full { grid-column: 1 / -1; }
+.form-label {
+  font-size: 0.68rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+.form-group input,
+.form-group select {
+  flex: none;
+  width: 100%;
+  border-radius: 12px;
+  padding: 11px 16px;
+  transition: border 0.25s, box-shadow 0.25s, background 0.25s;
+}
+.form-group input:focus,
+.form-group select:focus {
+  background: rgba(255,255,255,0.07);
+}
+
+/* Password strength */
+.pw-strength-bar {
+  height: 3px;
+  background: var(--border);
+  border-radius: 3px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.pw-strength-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 3px;
+  transition: width 0.4s ease, background 0.4s ease;
+}
+.pw-strength-label {
+  font-size: 0.65rem;
+  font-family: 'DM Mono', monospace;
+  color: var(--muted);
+  margin-top: 3px;
+  transition: color 0.3s;
+}
+
+/* Field error message */
+.field-error {
+  font-size: 0.68rem;
+  color: var(--danger);
+  min-height: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.2s, transform 0.2s;
+}
+.field-error.show { opacity: 1; transform: translateY(0); }
+.field-error::before { content: '⚠'; font-size: 0.7rem; }
+
+/* Checkbox */
+.check-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 4px 0 20px;
+}
+.check-group input[type="checkbox"] {
+  width: 18px; height: 18px;
+  min-width: 18px;
+  flex: none;
+  accent-color: var(--accent);
+  cursor: pointer;
+  margin-top: 2px;
+  border-radius: 4px;
+}
+.check-label { font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
+.check-label a { color: var(--accent); text-decoration: none; }
+.check-label a:hover { text-decoration: underline; }
+
+/* Submit button */
+.btn-register {
+  width: 100%;
+  padding: 14px;
+  border-radius: 40px;
+  background: linear-gradient(135deg, var(--accent), #0288d1);
+  border: none;
+  color: #0b0f1a;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 0.25s;
+  position: relative;
+  overflow: hidden;
+}
+.btn-register::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.btn-register:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(79,195,247,0.35); }
+.btn-register:hover::after { opacity: 1; }
+.btn-register:active { transform: translateY(0); }
+.btn-register:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* Divider */
+.reg-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0;
+}
+.reg-divider hr { flex: 1; border: none; border-top: 1px solid var(--border); }
+.reg-divider span { font-size: 0.7rem; color: var(--muted); white-space: nowrap; }
+
+/* Sign-in link */
+.signin-link { text-align: center; font-size: 0.8rem; color: var(--muted); margin-top: 18px; }
+.signin-link a { color: var(--accent); text-decoration: none; font-weight: 600; }
+.signin-link a:hover { text-decoration: underline; }
+
+/* Success state */
+.reg-success {
+  display: none;
+  text-align: center;
+  padding: 40px 20px;
+  animation: fadeUp 0.5s ease forwards;
+}
+.reg-success.show { display: block; }
+.success-icon {
+  width: 72px; height: 72px;
+  background: rgba(102,187,106,0.15);
+  border: 2px solid var(--success);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2rem;
+  margin: 0 auto 20px;
+  animation: pulse 2s ease infinite;
+}
+.reg-success h3 { font-size: 1.4rem; font-weight: 700; color: var(--success); margin-bottom: 8px; }
+.reg-success p { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
+.reg-success .btn-go {
+  margin-top: 24px;
+  display: inline-block;
+  padding: 10px 28px;
+  border-radius: 40px;
+  background: var(--accent);
+  color: #0b0f1a;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  border: none;
+  font-family: 'Space Grotesk', sans-serif;
+  transition: all 0.2s;
+}
+.reg-success .btn-go:hover { background: #81d4fa; transform: translateY(-1px); }
+
+/* Progress steps */
+.reg-steps {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+.step-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: all 0.3s;
+}
+.step-dot.active { background: var(--accent); transform: scale(1.3); }
+.step-dot.done { background: var(--success); }
+
+/* Character counter */
+.char-counter {
+  font-size: 0.65rem;
+  font-family: 'DM Mono', monospace;
+  color: var(--muted);
+  text-align: right;
+  margin-top: 2px;
+}
+
+/* FOOTER */
+.footer { margin-top: 40px; font-size: 0.68rem; color: rgba(232,237,248,0.2); letter-spacing: 1px; text-align: center; }
+.footer a { color: var(--accent); text-decoration: none; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(102,187,106,0.3); }
+  50% { box-shadow: 0 0 0 10px rgba(102,187,106,0); }
+}
+.fadeup { animation: fadeUp 0.4s ease forwards; }
+
+body.clear-day    { background-image: radial-gradient(ellipse 80% 60% at 20% 0%, rgba(255,200,50,0.08) 0%, transparent 60%), radial-gradient(ellipse 60% 50% at 80% 100%, rgba(79,195,247,0.05) 0%, transparent 50%); }
+body.clear-night  { background-image: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(79,147,247,0.06) 0%, transparent 60%); }
+body.rain         { background-image: radial-gradient(ellipse 80% 60% at 20% 10%, rgba(79,130,247,0.08) 0%, transparent 60%); }
+body.thunderstorm { background-image: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(148,79,247,0.08) 0%, transparent 60%); }
+body.snow         { background-image: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(200,220,255,0.06) 0%, transparent 60%); }
+
+@media (max-width: 700px) {
+  .weather-layout { grid-template-columns: 1fr; }
+  .card.full { grid-column: 1; }
+  .gap-controls { flex-direction: column; align-items: stretch; }
+  input[type="range"] { width: 100%; }
+  .form-row { grid-template-columns: 1fr; }
+  .reg-card { padding: 24px 18px; }
+}
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <div class="brand">at<span>m</span>os</div>
+  <div class="nav-tabs">
+    <div class="tab active" data-view="weather">Weather</div>
+    <div class="tab" data-view="gapminder">City Explorer</div>
+    <div class="tab" data-view="cities">City Atlas</div>
+    <div class="tab" data-view="register">Register</div>
+  </div>
+</div>
+
+<!-- ========== WEATHER VIEW ========== -->
+<div class="view active" id="view-weather">
+  <div class="weather-layout">
+
+    <div class="search-panel">
+      <input type="text" id="city-input" placeholder="Search a city..."/>
+      <select id="city-select">
+        <option value="">Popular cities</option>
+        <option value="New York">New York, US</option>
+        <option value="London">London, UK</option>
+        <option value="Tokyo">Tokyo, Japan</option>
+        <option value="Paris">Paris, France</option>
+        <option value="Dubai">Dubai, UAE</option>
+        <option value="Sydney">Sydney, Australia</option>
+        <option value="Mumbai">Mumbai, India</option>
+        <option value="Singapore">Singapore</option>
+        <option value="Istanbul">Istanbul, Turkey</option>
+        <option value="Berlin">Berlin, Germany</option>
+        <option value="Cairo">Cairo, Egypt</option>
+        <option value="São Paulo">São Paulo, Brazil</option>
+      </select>
+      <button class="primary" id="search-btn">Search</button>
+      <button id="detect-btn">⊙ Detect</button>
+      <div class="unit-row">
+        <span id="lbl-c" class="on" onclick="setUnit('metric')">°C</span>
+        <div class="pill" id="pill" onclick="toggleUnit()"></div>
+        <span id="lbl-f" onclick="setUnit('imperial')">°F</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="loader" id="loader"><div class="spinner"></div><p>Fetching weather…</p></div>
+      <div class="error" id="error"><strong>Not found</strong><span id="err-text">Try a different city.</span></div>
+      <div class="output" id="output">
+        <div class="city-name" id="city-name">--</div>
+        <div class="country" id="country">--</div>
+        <div class="temp-row">
+          <img id="icon" src="" alt=""/>
+          <div class="big-temp" id="temp">--</div>
+          <div class="unit-sym" id="unit-sym">°C</div>
+        </div>
+        <div class="desc" id="desc">--</div>
+        <div class="feels" id="feels">--</div>
+        <hr/>
+        <div id="react-stats-root"></div>
+      </div>
+    </div>
+
+    <div class="card" id="city-info-card" style="display:none">
+      <div id="city-info-content"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ========== GAPMINDER VIEW ========== -->
+<div class="view" id="view-gapminder">
+  <div class="gap-header">
+    <h2>City Population Explorer</h2>
+    <p>Bubble size = population · X = GDP per capita · Y = avg temperature · Color = continent</p>
+  </div>
+  <div class="gap-controls">
+    <div class="ctrl-group">
+      <label>X Axis</label>
+      <select id="x-axis">
+        <option value="gdp">GDP per capita (USD)</option>
+        <option value="population">Population (M)</option>
+        <option value="area">Area (km²)</option>
+        <option value="avgTemp">Avg Temperature (°C)</option>
+      </select>
+    </div>
+    <div class="ctrl-group">
+      <label>Y Axis</label>
+      <select id="y-axis">
+        <option value="avgTemp">Avg Temperature (°C)</option>
+        <option value="gdp">GDP per capita (USD)</option>
+        <option value="humidity">Avg Humidity (%)</option>
+        <option value="airQuality">Air Quality Index</option>
+      </select>
+    </div>
+    <div class="ctrl-group">
+      <label>Min Population (M)</label>
+      <input type="range" id="pop-filter" min="0" max="35" value="0" step="0.5"/>
+      <div class="range-val" id="pop-val">0 M</div>
+    </div>
+    <div class="ctrl-group">
+      <label>Min GDP (USD)</label>
+      <input type="number" id="gdp-filter" placeholder="0" min="0" value="0"/>
+    </div>
+    <div class="ctrl-group">
+      <label>Continent</label>
+      <select id="continent-filter">
+        <option value="">All Continents</option>
+        <option value="Asia">Asia</option>
+        <option value="Europe">Europe</option>
+        <option value="Americas">Americas</option>
+        <option value="Africa">Africa</option>
+        <option value="Oceania">Oceania</option>
+      </select>
+    </div>
+  </div>
+  <div id="chart-container">
+    <svg id="gapminder-chart" width="100%" style="display:block;"></svg>
+  </div>
+  <div class="legend" id="chart-legend"></div>
+</div>
+
+<!-- ========== CITY ATLAS VIEW ========== -->
+<div class="view" id="view-cities">
+  <div class="gap-header" style="margin-bottom:16px">
+    <h2>City Atlas</h2>
+    <p>Rich dataset of 30 world cities — click any card to load weather</p>
+  </div>
+  <div class="json-filters">
+    <div class="ctrl-group">
+      <label>Search City</label>
+      <input type="text" id="atlas-search" placeholder="Filter cities..."/>
+    </div>
+    <div class="ctrl-group">
+      <label>Min Population (M)</label>
+      <input type="number" id="atlas-pop" placeholder="0" min="0" step="0.5" value="0"/>
+    </div>
+    <div class="ctrl-group">
+      <label>Continent</label>
+      <select id="atlas-continent">
+        <option value="">All</option>
+        <option value="Asia">Asia</option>
+        <option value="Europe">Europe</option>
+        <option value="Americas">Americas</option>
+        <option value="Africa">Africa</option>
+        <option value="Oceania">Oceania</option>
+      </select>
+    </div>
+    <div class="ctrl-group">
+      <label>Sort by</label>
+      <select id="atlas-sort">
+        <option value="population">Population</option>
+        <option value="gdp">GDP/capita</option>
+        <option value="avgTemp">Temperature</option>
+        <option value="name">Name</option>
+      </select>
+    </div>
+  </div>
+  <div class="json-grid" id="cities-grid"></div>
+</div>
+
+<!-- ========== REGISTER VIEW ========== -->
+<div class="view" id="view-register">
+  <div class="reg-header">
+    <h2>Create your account</h2>
+    <p>Join Atmos to save your favourite cities and personalise your experience</p>
+  </div>
+
+  <div class="reg-steps">
+    <div class="step-dot active" id="dot-1"></div>
+    <div class="step-dot" id="dot-2"></div>
+    <div class="step-dot" id="dot-3"></div>
+  </div>
+
+  <div class="reg-card">
+
+    <!-- SUCCESS STATE -->
+    <div class="reg-success" id="reg-success">
+      <div class="success-icon">✓</div>
+      <h3>You're all set!</h3>
+      <p>Welcome to Atmos. Your account has been created successfully.<br/>Start exploring the weather around the world.</p>
+      <button class="btn-go" onclick="switchView('weather')">Explore Weather →</button>
+    </div>
+
+    <!-- FORM -->
+    <div id="reg-form-wrap">
+
+      <!-- Step 1: Personal Info -->
+      <div class="reg-step" id="step-1">
+        <div style="font-size:0.68rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:18px;font-weight:600">Step 1 of 3 — Personal Info</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">First Name</label>
+            <input type="text" id="reg-fname" placeholder="Jane" maxlength="30"/>
+            <div class="field-error" id="err-fname"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Last Name</label>
+            <input type="text" id="reg-lname" placeholder="Doe" maxlength="30"/>
+            <div class="field-error" id="err-lname"></div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Date of Birth</label>
+            <input type="date" id="reg-dob" style="border-radius:12px;min-width:0;width:100%;flex:none;" max=""/>
+            <div class="field-error" id="err-dob"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Gender</label>
+            <select id="reg-gender" style="border-radius:12px;min-width:0;width:100%;flex:none;">
+              <option value="">Select…</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="nonbinary">Non-binary</option>
+              <option value="prefer-not">Prefer not to say</option>
+            </select>
+            <div class="field-error" id="err-gender"></div>
+          </div>
+        </div>
+        <button class="btn-register" onclick="goStep(2)">Continue →</button>
+      </div>
+
+      <!-- Step 2: Account Info -->
+      <div class="reg-step" id="step-2" style="display:none">
+        <div style="font-size:0.68rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:18px;font-weight:600">Step 2 of 3 — Account Details</div>
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <input type="text" id="reg-username" placeholder="jane_doe" maxlength="20"/>
+          <div class="char-counter" id="username-counter">0 / 20</div>
+          <div class="field-error" id="err-username"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input type="email" id="reg-email" placeholder="jane@example.com"/>
+          <div class="field-error" id="err-email"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone (optional)</label>
+          <input type="tel" id="reg-phone" placeholder="+91 98765 43210"/>
+          <div class="field-error" id="err-phone"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:8px">
+          <button onclick="goStep(1)" style="flex:1">← Back</button>
+          <button class="primary" onclick="goStep(3)" style="flex:2">Continue →</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Password & Preferences -->
+      <div class="reg-step" id="step-3" style="display:none">
+        <div style="font-size:0.68rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:18px;font-weight:600">Step 3 of 3 — Security & Preferences</div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" id="reg-pw" placeholder="Min 8 characters"/>
+          <div class="pw-strength-bar"><div class="pw-strength-fill" id="pw-fill"></div></div>
+          <div class="pw-strength-label" id="pw-label">Enter a password</div>
+          <div class="field-error" id="err-pw"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirm Password</label>
+          <input type="password" id="reg-pw2" placeholder="Re-enter your password"/>
+          <div class="field-error" id="err-pw2"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Home City (for weather defaults)</label>
+          <select id="reg-city" style="border-radius:12px;min-width:0;width:100%;flex:none;">
+            <option value="">Select a city…</option>
+            <option>Tokyo</option><option>Delhi</option><option>Shanghai</option>
+            <option>São Paulo</option><option>Mumbai</option><option>Mexico City</option>
+            <option>Cairo</option><option>Beijing</option><option>New York</option>
+            <option>London</option><option>Paris</option><option>Berlin</option>
+            <option>Sydney</option><option>Dubai</option><option>Singapore</option>
+            <option>Toronto</option><option>Bangkok</option><option>Jakarta</option>
+            <option>Moscow</option><option>Buenos Aires</option>
+          </select>
+          <div class="field-error" id="err-city"></div>
+        </div>
+        <div class="check-group">
+          <input type="checkbox" id="reg-terms"/>
+          <label class="check-label" for="reg-terms">
+            I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>. I consent to receiving weather alerts and updates.
+          </label>
+        </div>
+        <div class="field-error" id="err-terms" style="margin-top:-12px;margin-bottom:14px"></div>
+        <div style="display:flex;gap:10px;">
+          <button onclick="goStep(2)" style="flex:1">← Back</button>
+          <button class="btn-register" id="reg-submit-btn" onclick="submitRegistration()" style="flex:2">Create Account</button>
+        </div>
+      </div>
+
+    </div><!-- /reg-form-wrap -->
+
+    <div class="reg-divider"><hr/><span>already have an account?</span><hr/></div>
+    <div class="signin-link"><a href="#" onclick="switchView('weather')">← Back to Atmos</a></div>
+  </div>
+</div>
+
+<div class="chart-tooltip" id="tooltip"></div>
+<div class="footer">Atmos · Made by Swayam · Powered by <a href="https://openweathermap.org" target="_blank">OpenWeatherMap</a></div>
+
+<script>
+// ============================================================
+// CITY JSON DATABASE
+// ============================================================
+const CITIES = [
+  { name:"Tokyo",       country:"Japan",         continent:"Asia",     lat:35.68, lon:139.69, population:37.43, gdp:42000, area:2194,  avgTemp:15.4, humidity:70, airQuality:58,  color:"#4fc3f7" },
+  { name:"Delhi",       country:"India",          continent:"Asia",     lat:28.66, lon:77.23,  population:32.94, gdp:4200,  area:1484,  avgTemp:25.0, humidity:62, airQuality:162, color:"#4fc3f7" },
+  { name:"Shanghai",    country:"China",          continent:"Asia",     lat:31.23, lon:121.47, population:28.52, gdp:23000, area:6341,  avgTemp:16.1, humidity:74, airQuality:95,  color:"#4fc3f7" },
+  { name:"São Paulo",   country:"Brazil",         continent:"Americas", lat:-23.55, lon:-46.63,population:22.43, gdp:8700,  area:1521,  avgTemp:20.8, humidity:78, airQuality:42,  color:"#f06292" },
+  { name:"Mumbai",      country:"India",          continent:"Asia",     lat:19.08, lon:72.88,  population:21.67, gdp:5800,  area:603,   avgTemp:27.2, humidity:82, airQuality:130, color:"#4fc3f7" },
+  { name:"Mexico City", country:"Mexico",         continent:"Americas", lat:19.43, lon:-99.13, population:21.58, gdp:9800,  area:1485,  avgTemp:16.0, humidity:56, airQuality:80,  color:"#f06292" },
+  { name:"Cairo",       country:"Egypt",          continent:"Africa",   lat:30.06, lon:31.25,  population:21.32, gdp:4200,  area:3085,  avgTemp:22.0, humidity:50, airQuality:90,  color:"#ffb74d" },
+  { name:"Dhaka",       country:"Bangladesh",     continent:"Asia",     lat:23.81, lon:90.41,  population:21.01, gdp:2100,  area:306,   avgTemp:25.5, humidity:80, airQuality:148, color:"#4fc3f7" },
+  { name:"Beijing",     country:"China",          continent:"Asia",     lat:39.91, lon:116.39, population:20.90, gdp:28000, area:16411, avgTemp:13.1, humidity:55, airQuality:106, color:"#4fc3f7" },
+  { name:"Osaka",       country:"Japan",          continent:"Asia",     lat:34.69, lon:135.50, population:19.01, gdp:38000, area:13033, avgTemp:16.2, humidity:68, airQuality:40,  color:"#4fc3f7" },
+  { name:"New York",    country:"USA",            continent:"Americas", lat:40.71, lon:-74.01, population:18.82, gdp:72000, area:783,   avgTemp:13.1, humidity:63, airQuality:35,  color:"#f06292" },
+  { name:"Karachi",     country:"Pakistan",       continent:"Asia",     lat:24.86, lon:67.01,  population:16.09, gdp:1700,  area:3527,  avgTemp:26.3, humidity:71, airQuality:140, color:"#4fc3f7" },
+  { name:"Chongqing",   country:"China",          continent:"Asia",     lat:29.56, lon:106.55, population:15.87, gdp:14000, area:82403, avgTemp:18.3, humidity:81, airQuality:100, color:"#4fc3f7" },
+  { name:"Istanbul",    country:"Turkey",         continent:"Europe",   lat:41.01, lon:28.95,  population:15.19, gdp:12500, area:5461,  avgTemp:14.5, humidity:69, airQuality:60,  color:"#81c784" },
+  { name:"Kinshasa",    country:"DR Congo",       continent:"Africa",   lat:-4.32, lon:15.32,  population:14.97, gdp:550,   area:9965,  avgTemp:25.1, humidity:79, airQuality:50,  color:"#ffb74d" },
+  { name:"Lagos",       country:"Nigeria",        continent:"Africa",   lat:6.52,  lon:3.38,   population:14.86, gdp:2800,  area:1171,  avgTemp:27.0, humidity:85, airQuality:70,  color:"#ffb74d" },
+  { name:"London",      country:"UK",             continent:"Europe",   lat:51.51, lon:-0.13,  population:9.54,  gdp:52000, area:1572,  avgTemp:11.3, humidity:75, airQuality:30,  color:"#81c784" },
+  { name:"Paris",       country:"France",         continent:"Europe",   lat:48.85, lon:2.35,   population:11.02, gdp:47000, area:105,   avgTemp:12.3, humidity:73, airQuality:28,  color:"#81c784" },
+  { name:"Berlin",      country:"Germany",        continent:"Europe",   lat:52.52, lon:13.41,  population:3.77,  gdp:52000, area:892,   avgTemp:9.6,  humidity:75, airQuality:22,  color:"#81c784" },
+  { name:"Sydney",      country:"Australia",      continent:"Oceania",  lat:-33.87, lon:151.21, population:5.31, gdp:54000, area:12368, avgTemp:17.7, humidity:65, airQuality:15,  color:"#ce93d8" },
+  { name:"Dubai",       country:"UAE",            continent:"Asia",     lat:25.20, lon:55.27,  population:3.48,  gdp:43000, area:4114,  avgTemp:28.5, humidity:59, airQuality:65,  color:"#4fc3f7" },
+  { name:"Singapore",   country:"Singapore",      continent:"Asia",     lat:1.35,  lon:103.82, population:5.69,  gdp:65000, area:728,   avgTemp:27.0, humidity:84, airQuality:35,  color:"#4fc3f7" },
+  { name:"Toronto",     country:"Canada",         continent:"Americas", lat:43.65, lon:-79.38, population:6.20,  gdp:51000, area:630,   avgTemp:9.4,  humidity:69, airQuality:20,  color:"#f06292" },
+  { name:"Johannesburg",country:"South Africa",   continent:"Africa",   lat:-26.20, lon:28.04, population:5.78, gdp:7400,  area:1645,  avgTemp:15.8, humidity:55, airQuality:55,  color:"#ffb74d" },
+  { name:"Bangkok",     country:"Thailand",       continent:"Asia",     lat:13.75, lon:100.52, population:10.72, gdp:8000, area:1569,  avgTemp:28.6, humidity:77, airQuality:88,  color:"#4fc3f7" },
+  { name:"Jakarta",     country:"Indonesia",      continent:"Asia",     lat:-6.21, lon:106.85, population:10.77, gdp:4500, area:661,   avgTemp:27.5, humidity:83, airQuality:98,  color:"#4fc3f7" },
+  { name:"Nairobi",     country:"Kenya",          continent:"Africa",   lat:-1.29, lon:36.82,  population:4.92,  gdp:2100, area:696,   avgTemp:18.2, humidity:63, airQuality:44,  color:"#ffb74d" },
+  { name:"Moscow",      country:"Russia",         continent:"Europe",   lat:55.76, lon:37.62,  population:12.63, gdp:12000, area:2511, avgTemp:5.8,  humidity:78, airQuality:45,  color:"#81c784" },
+  { name:"Buenos Aires",country:"Argentina",      continent:"Americas", lat:-34.60, lon:-58.38,population:15.26, gdp:10500, area:203,  avgTemp:17.9, humidity:72, airQuality:38,  color:"#f06292" },
+  { name:"Lima",        country:"Peru",           continent:"Americas", lat:-12.05, lon:-77.04,population:10.72, gdp:7100,  area:2672, avgTemp:18.6, humidity:82, airQuality:60,  color:"#f06292" },
+];
+
+const CONTINENT_COLORS = {
+  Asia: "#4fc3f7", Europe: "#81c784", Americas: "#f06292",
+  Africa: "#ffb74d", Oceania: "#ce93d8"
+};
+
+// ============================================================
+// WEATHER API
+// ============================================================
+const API_KEY = "e3d1d7cca329dfb38db37626fd9eb29a";
+const BASE_URL = "https://api.openweathermap.org/data/2.5/weather";
+
+let unit = "metric";
+let lastData = null;
+
+const cityInput  = document.getElementById("city-input");
+const citySelect = document.getElementById("city-select");
+const searchBtn  = document.getElementById("search-btn");
+const detectBtn  = document.getElementById("detect-btn");
+const pill       = document.getElementById("pill");
+const loader     = document.getElementById("loader");
+const errorEl    = document.getElementById("error");
+const output     = document.getElementById("output");
+
+function toggleUnit() { setUnit(unit === "metric" ? "imperial" : "metric"); }
+function setUnit(u) {
+  unit = u;
+  pill.classList.toggle("f", u === "imperial");
+  document.getElementById("lbl-c").classList.toggle("on", u === "metric");
+  document.getElementById("lbl-f").classList.toggle("on", u === "imperial");
+  if (lastData) renderWeather(lastData);
+}
+
+searchBtn.addEventListener("click", () => {
+  const city = cityInput.value.trim() || citySelect.value;
+  if (!city) return showError("Please enter or select a city.");
+  fetchByCity(city);
+});
+cityInput.addEventListener("keydown", e => { if (e.key === "Enter") searchBtn.click(); });
+citySelect.addEventListener("change", () => {
+  if (citySelect.value) { cityInput.value = ""; fetchByCity(citySelect.value); }
+});
+detectBtn.addEventListener("click", () => {
+  if (!navigator.geolocation) return showError("Geolocation not supported.");
+  showLoader();
+  navigator.geolocation.getCurrentPosition(
+    pos => fetchByCoords(pos.coords.latitude, pos.coords.longitude),
+    () => showError("Location permission denied.")
+  );
+});
+
+function fetchByCity(city) {
+  showLoader();
+  fetchWeather(`${BASE_URL}?q=${encodeURIComponent(city)}&units=${unit}&appid=${API_KEY}`);
+  showCityInfo(city);
+}
+function fetchByCoords(lat, lon) {
+  fetchWeather(`${BASE_URL}?lat=${lat}&lon=${lon}&units=${unit}&appid=${API_KEY}`);
+}
+
+async function fetchWeather(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error((await res.json()).message || "City not found.");
+    const data = await res.json();
+    lastData = data;
+    renderWeather(data);
+  } catch(e) { showError(e.message); }
+}
+
+function renderWeather(data) {
+  const w = data.weather[0], m = data.main;
+  const isMetric = unit === "metric";
+  document.getElementById("city-name").textContent = data.name;
+  document.getElementById("country").textContent = data.sys.country || "";
+  document.getElementById("temp").textContent = Math.round(m.temp);
+  document.getElementById("unit-sym").textContent = isMetric ? "°C" : "°F";
+  document.getElementById("icon").src = `https://openweathermap.org/img/wn/${w.icon}@2x.png`;
+  document.getElementById("desc").textContent = w.description;
+  document.getElementById("feels").textContent =
+    `Feels like ${Math.round(m.feels_like)}° · High ${Math.round(m.temp_max)}° / Low ${Math.round(m.temp_min)}°`;
+  applyTheme(w.id, w.icon);
+
+  // Feed stats into React component
+  renderReactStats({
+    humidity:    m.humidity,
+    wind:        (data.wind.speed||0).toFixed(1),
+    windUnit:    isMetric ? "m/s" : "mph",
+    windDeg:     data.wind.deg || 0,
+    visibility:  data.visibility ? (data.visibility/1000).toFixed(1) : null,
+    pressure:    m.pressure,
+    clouds:      data.clouds.all,
+    sunrise:     toTime(data.sys.sunrise, data.timezone),
+    sunset:      toTime(data.sys.sunset,  data.timezone),
+  });
+
+  showOutput();
+}
+
+function showCityInfo(cityName) {
+  const found = CITIES.find(c => c.name.toLowerCase() === cityName.toLowerCase()
+    || c.name.toLowerCase().includes(cityName.toLowerCase()));
+  const card = document.getElementById("city-info-card");
+  const content = document.getElementById("city-info-content");
+  if (!found) { card.style.display = "none"; return; }
+  card.style.display = "block";
+  const maxPop = Math.max(...CITIES.map(c=>c.population));
+  content.innerHTML = `
+    <div style="font-size:0.65rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">City Profile</div>
+    <div style="font-size:1.2rem;font-weight:700;margin-bottom:2px">${found.name}</div>
+    <div style="font-size:0.68rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:16px">${found.country} · ${found.continent}</div>
+    <div class="city-stats">
+      <div class="cs"><div class="cs-label">Population</div><div class="cs-val">${found.population}M</div></div>
+      <div class="cs"><div class="cs-label">GDP/capita</div><div class="cs-val">$${(found.gdp/1000).toFixed(0)}K</div></div>
+      <div class="cs"><div class="cs-label">Area</div><div class="cs-val">${found.area.toLocaleString()} km²</div></div>
+      <div class="cs"><div class="cs-label">Avg Temp</div><div class="cs-val">${found.avgTemp}°C</div></div>
+      <div class="cs"><div class="cs-label">Humidity</div><div class="cs-val">${found.humidity}%</div></div>
+      <div class="cs"><div class="cs-label">Air Quality</div><div class="cs-val">${found.airQuality}</div></div>
+    </div>
+    <div class="pop-bar" style="margin-top:14px"><div class="pop-fill" style="width:${(found.population/maxPop*100).toFixed(1)}%;background:${CONTINENT_COLORS[found.continent]}"></div></div>
+    <div style="font-size:0.68rem;color:var(--muted);margin-top:5px">Population relative to largest city in dataset</div>
+  `;
+}
+
+function applyTheme(id, icon) {
+  const night = icon.endsWith("n");
+  const themes = ["clear-day","clear-night","clouds","rain","drizzle","snow","thunderstorm","mist"];
+  document.body.classList.remove(...themes);
+  let t;
+  if (id === 800) t = night ? "clear-night" : "clear-day";
+  else if (id > 800) t = "clouds";
+  else if (id >= 700) t = "mist";
+  else if (id >= 600) t = "snow";
+  else if (id >= 500) t = "rain";
+  else if (id >= 300) t = "drizzle";
+  else if (id >= 200) t = "thunderstorm";
+  else t = night ? "clear-night" : "clear-day";
+  document.body.classList.add(t);
+}
+
+function degToDir(d) { return ["N","NE","E","SE","S","SW","W","NW"][Math.round(d/45)%8]; }
+function toTime(unix, tz) {
+  const d = new Date((unix+tz)*1000);
+  return d.toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit",timeZone:"UTC"});
+}
+function showLoader() { loader.classList.add("show"); errorEl.classList.remove("show"); output.classList.remove("show"); }
+function showError(m) { loader.classList.remove("show"); output.classList.remove("show"); errorEl.classList.add("show"); document.getElementById("err-text").textContent = m; }
+function showOutput() { loader.classList.remove("show"); errorEl.classList.remove("show"); output.classList.add("show"); output.classList.add("fadeup"); }
+
+// ============================================================
+// GAPMINDER CHART
+// ============================================================
+const AXIS_LABELS = {
+  gdp: "GDP per capita (USD)", population: "Population (M)",
+  area: "Area (km²)", avgTemp: "Avg Temp (°C)", humidity: "Avg Humidity (%)", airQuality: "Air Quality Index"
+};
+
+function buildChart() {
+  const xKey = document.getElementById("x-axis").value;
+  const yKey = document.getElementById("y-axis").value;
+  const minPop = parseFloat(document.getElementById("pop-filter").value) || 0;
+  const minGdp = parseFloat(document.getElementById("gdp-filter").value) || 0;
+  const contFilter = document.getElementById("continent-filter").value;
+
+  let data = CITIES.filter(d =>
+    d.population >= minPop &&
+    d.gdp >= minGdp &&
+    (contFilter === "" || d.continent === contFilter)
+  );
+
+  const svg = d3.select("#gapminder-chart");
+  const container = document.getElementById("chart-container");
+  const W = container.clientWidth - 40;
+  const H = Math.min(520, Math.max(360, W * 0.55));
+  const margin = { top: 20, right: 30, bottom: 60, left: 70 };
+  const innerW = W - margin.left - margin.right;
+  const innerH = H - margin.top - margin.bottom;
+
+  svg.attr("viewBox", `0 0 ${W} ${H}`).attr("height", H);
+  svg.selectAll("*").remove();
+
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  const xVals = data.map(d => d[xKey]);
+  const yVals = data.map(d => d[yKey]);
+  const xScale = d3.scaleLinear().domain([d3.min(xVals)*0.9, d3.max(xVals)*1.08]).range([0, innerW]).nice();
+  const yScale = d3.scaleLinear().domain([d3.min(yVals)*0.88, d3.max(yVals)*1.1]).range([innerH, 0]).nice();
+  const rScale = d3.scaleSqrt().domain([0, d3.max(CITIES, d=>d.population)]).range([6, 38]);
+
+  g.append("g").selectAll("line").data(yScale.ticks(6)).enter().append("line")
+    .attr("x1",0).attr("x2",innerW).attr("y1",d=>yScale(d)).attr("y2",d=>yScale(d))
+    .attr("stroke","rgba(255,255,255,0.05)").attr("stroke-dasharray","4,4");
+  g.append("g").selectAll("line").data(xScale.ticks(6)).enter().append("line")
+    .attr("x1",d=>xScale(d)).attr("x2",d=>xScale(d)).attr("y1",0).attr("y2",innerH)
+    .attr("stroke","rgba(255,255,255,0.05)").attr("stroke-dasharray","4,4");
+
+  const xAxis = g.append("g").attr("transform",`translate(0,${innerH})`).call(
+    d3.axisBottom(xScale).ticks(6).tickFormat(d => d >= 1000 ? `${(d/1000).toFixed(0)}K` : d));
+  xAxis.selectAll("text").attr("fill","rgba(232,237,248,0.5)").style("font-family","'DM Mono',monospace").style("font-size","0.65rem");
+  xAxis.selectAll("line, path").attr("stroke","rgba(255,255,255,0.1)");
+
+  const yAxis = g.append("g").call(
+    d3.axisLeft(yScale).ticks(6).tickFormat(d => d >= 1000 ? `${(d/1000).toFixed(0)}K` : d));
+  yAxis.selectAll("text").attr("fill","rgba(232,237,248,0.5)").style("font-family","'DM Mono',monospace").style("font-size","0.65rem");
+  yAxis.selectAll("line, path").attr("stroke","rgba(255,255,255,0.1)");
+
+  g.append("text").attr("x", innerW/2).attr("y", innerH+50).attr("text-anchor","middle")
+    .attr("fill","rgba(232,237,248,0.4)").style("font-size","0.72rem").text(AXIS_LABELS[xKey]);
+  g.append("text").attr("transform","rotate(-90)").attr("x",-innerH/2).attr("y",-56)
+    .attr("text-anchor","middle").attr("fill","rgba(232,237,248,0.4)").style("font-size","0.72rem").text(AXIS_LABELS[yKey]);
+
+  const tooltip = document.getElementById("tooltip");
+  const circles = g.selectAll("circle").data(data).enter().append("circle")
+    .attr("cx", d => xScale(d[xKey])).attr("cy", d => yScale(d[yKey])).attr("r", 0)
+    .attr("fill", d => CONTINENT_COLORS[d.continent]).attr("fill-opacity", 0.55)
+    .attr("stroke", d => CONTINENT_COLORS[d.continent]).attr("stroke-width", 1.5)
+    .attr("stroke-opacity", 0.9).style("cursor","pointer")
+    .on("mousemove", function(event, d) {
+      d3.select(this).attr("fill-opacity", 0.85).attr("r", rScale(d.population)*1.1);
+      tooltip.style.display = "block";
+      tooltip.style.left = (event.clientX+14)+"px";
+      tooltip.style.top  = (event.clientY-14)+"px";
+      tooltip.innerHTML = `<div class="tooltip-city" style="color:${CONTINENT_COLORS[d.continent]}">${d.name}</div>
+        <div class="tooltip-row"><span>${d.country}</span><span style="color:var(--muted)">${d.continent}</span></div>
+        <div class="tooltip-row"><span>Population</span><span>${d.population}M</span></div>
+        <div class="tooltip-row"><span>GDP/capita</span><span>$${d.gdp.toLocaleString()}</span></div>
+        <div class="tooltip-row"><span>Avg Temp</span><span>${d.avgTemp}°C</span></div>
+        <div class="tooltip-row"><span>Humidity</span><span>${d.humidity}%</span></div>
+        <div class="tooltip-row"><span>Air Quality</span><span>${d.airQuality}</span></div>`;
+    })
+    .on("mouseleave", function(_, d) {
+      d3.select(this).attr("fill-opacity",0.55).attr("r",rScale(d.population));
+      tooltip.style.display = "none";
+    })
+    .on("click", (_,d) => { switchView("weather"); fetchByCity(d.name); });
+
+  circles.transition().duration(800).ease(d3.easeCubicOut)
+    .delay((_,i) => i*30).attr("r", d => rScale(d.population));
+
+  g.selectAll("text.city-label").data(data.filter(d=>d.population>12)).enter()
+    .append("text").attr("class","city-label")
+    .attr("x", d=>xScale(d[xKey])+rScale(d.population)+4)
+    .attr("y", d=>yScale(d[yKey])+4)
+    .attr("fill","rgba(232,237,248,0.65)").style("font-size","0.65rem")
+    .style("pointer-events","none").text(d=>d.name);
+
+  const legend = document.getElementById("chart-legend");
+  const continents = [...new Set(data.map(d=>d.continent))];
+  legend.innerHTML = continents.map(c=>`
+    <div class="legend-item"><div class="legend-dot" style="background:${CONTINENT_COLORS[c]}"></div>${c}</div>`).join("")
+    + `<div class="legend-item" style="margin-left:auto;font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--muted)">● size = population</div>`;
+}
+
+["x-axis","y-axis","continent-filter"].forEach(id => {
+  document.getElementById(id).addEventListener("change", buildChart);
+});
+document.getElementById("pop-filter").addEventListener("input", function() {
+  document.getElementById("pop-val").textContent = this.value + " M";
+  buildChart();
+});
+document.getElementById("gdp-filter").addEventListener("input", buildChart);
+
+// ============================================================
+// CITY ATLAS
+// ============================================================
+function renderAtlas() {
+  const search = document.getElementById("atlas-search").value.toLowerCase();
+  const minPop = parseFloat(document.getElementById("atlas-pop").value) || 0;
+  const continent = document.getElementById("atlas-continent").value;
+  const sortBy = document.getElementById("atlas-sort").value;
+  const maxPop = Math.max(...CITIES.map(c=>c.population));
+
+  let filtered = CITIES.filter(c =>
+    c.name.toLowerCase().includes(search) &&
+    c.population >= minPop &&
+    (continent === "" || c.continent === continent)
+  );
+
+  if (sortBy === "name") filtered.sort((a,b) => a.name.localeCompare(b.name));
+  else filtered.sort((a,b) => b[sortBy] - a[sortBy]);
+
+  const grid = document.getElementById("cities-grid");
+  grid.innerHTML = filtered.map(c => `
+    <div class="city-card fadeup" onclick="switchView('weather');fetchByCity('${c.name}')">
+      <div class="city-card-header">
+        <div><div class="city-card-name">${c.name}</div><div class="city-card-country">${c.country}</div></div>
+        <div class="city-badge" style="color:${CONTINENT_COLORS[c.continent]};border-color:${CONTINENT_COLORS[c.continent]}40">${c.continent}</div>
+      </div>
+      <div class="city-stats">
+        <div class="cs"><div class="cs-label">Population</div><div class="cs-val" style="color:${CONTINENT_COLORS[c.continent]}">${c.population}M</div></div>
+        <div class="cs"><div class="cs-label">GDP/capita</div><div class="cs-val">$${(c.gdp/1000).toFixed(0)}K</div></div>
+        <div class="cs"><div class="cs-label">Avg Temp</div><div class="cs-val">${c.avgTemp}°C</div></div>
+        <div class="cs"><div class="cs-label">Air Quality</div><div class="cs-val">${c.airQuality}</div></div>
+      </div>
+      <div class="pop-bar"><div class="pop-fill" style="width:${(c.population/maxPop*100).toFixed(1)}%;background:${CONTINENT_COLORS[c.continent]}"></div></div>
+    </div>`).join("");
+}
+
+["atlas-search","atlas-pop","atlas-continent","atlas-sort"].forEach(id => {
+  document.getElementById(id).addEventListener("input", renderAtlas);
+  document.getElementById(id).addEventListener("change", renderAtlas);
+});
+
+// ============================================================
+// TAB NAVIGATION
+// ============================================================
+function switchView(name) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === name));
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("active", v.id === `view-${name}`));
+  if (name === "gapminder") buildChart();
+  if (name === "cities") renderAtlas();
+}
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => switchView(tab.dataset.view));
+});
+
+// ============================================================
+// REGISTRATION — VALIDATION & MULTI-STEP
+// ============================================================
+
+// Set max DOB to today
+document.getElementById("reg-dob").max = new Date().toISOString().split("T")[0];
+
+// Username character counter
+document.getElementById("reg-username").addEventListener("input", function() {
+  const len = this.value.length;
+  document.getElementById("username-counter").textContent = `${len} / 20`;
+  clearErr("username");
+  if (len > 0) validateUsername(false);
+});
+
+// Password strength meter
+document.getElementById("reg-pw").addEventListener("input", function() {
+  updatePasswordStrength(this.value);
+  clearErr("pw");
+  const pw2 = document.getElementById("reg-pw2").value;
+  if (pw2) validatePw2(false);
+});
+document.getElementById("reg-pw2").addEventListener("input", function() {
+  validatePw2(false);
+});
+
+// Real-time blur validation for key fields
+["reg-fname","reg-lname","reg-email","reg-phone"].forEach(id => {
+  document.getElementById(id).addEventListener("blur", () => validateFieldById(id, false));
+});
+
+function fieldKey(id) { return id.replace("reg-",""); }
+
+function validateFieldById(id, show=true) {
+  const val = document.getElementById(id).value.trim();
+  const key = fieldKey(id);
+  switch(key) {
+    case "fname": return validateName(val, "fname", "First name", show);
+    case "lname": return validateName(val, "lname", "Last name", show);
+    case "email": return validateEmail(val, show);
+    case "phone": return validatePhone(val, show);
+  }
+  return true;
+}
+
+function showErr(field, msg) {
+  const el = document.getElementById("err-"+field);
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add("show");
+  const input = document.getElementById("reg-"+field);
+  if (input) { input.classList.add("input-error"); input.classList.remove("input-ok"); }
+}
+function clearErr(field) {
+  const el = document.getElementById("err-"+field);
+  if (!el) return;
+  el.classList.remove("show");
+  const input = document.getElementById("reg-"+field);
+  if (input) { input.classList.remove("input-error"); }
+}
+function markOk(field) {
+  clearErr(field);
+  const input = document.getElementById("reg-"+field);
+  if (input) { input.classList.add("input-ok"); input.classList.remove("input-error"); }
+}
+
+// Individual validators
+function validateName(val, field, label, show=true) {
+  if (!val) { if(show) showErr(field, `${label} is required.`); return false; }
+  if (val.length < 2) { if(show) showErr(field, `${label} must be at least 2 characters.`); return false; }
+  if (!/^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/.test(val)) { if(show) showErr(field, `${label} contains invalid characters.`); return false; }
+  markOk(field); return true;
+}
+
+function validateEmail(val, show=true) {
+  if (!val) { if(show) showErr("email","Email address is required."); return false; }
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+  if (!re.test(val)) { if(show) showErr("email","Please enter a valid email address."); return false; }
+  markOk("email"); return true;
+}
+
+function validatePhone(val, show=true) {
+  if (!val) { markOk("phone"); return true; } // optional
+  const cleaned = val.replace(/[\s\-().+]/g,"");
+  if (!/^\d{7,15}$/.test(cleaned)) { if(show) showErr("phone","Enter a valid phone number (7–15 digits)."); return false; }
+  markOk("phone"); return true;
+}
+
+function validateDob(show=true) {
+  const val = document.getElementById("reg-dob").value;
+  if (!val) { if(show) showErr("dob","Date of birth is required."); return false; }
+  const dob = new Date(val);
+  const now = new Date();
+  let age = now.getFullYear() - dob.getFullYear();
+  const m = now.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) age--;
+  if (age < 13) { if(show) showErr("dob","You must be at least 13 years old to register."); return false; }
+  if (age > 120) { if(show) showErr("dob","Please enter a valid date of birth."); return false; }
+  markOk("dob"); return true;
+}
+
+function validateGender(show=true) {
+  const val = document.getElementById("reg-gender").value;
+  if (!val) { if(show) showErr("gender","Please select a gender."); return false; }
+  clearErr("gender"); return true;
+}
+
+function validateUsername(show=true) {
+  const val = document.getElementById("reg-username").value.trim();
+  if (!val) { if(show) showErr("username","Username is required."); return false; }
+  if (val.length < 3) { if(show) showErr("username","Username must be at least 3 characters."); return false; }
+  if (!/^[A-Za-z0-9_.-]+$/.test(val)) { if(show) showErr("username","Only letters, numbers, _, . and - are allowed."); return false; }
+  if (/^[._-]/.test(val) || /[._-]$/.test(val)) { if(show) showErr("username","Username cannot start or end with a special character."); return false; }
+  markOk("username"); return true;
+}
+
+function validatePw(show=true) {
+  const val = document.getElementById("reg-pw").value;
+  if (!val) { if(show) showErr("pw","Password is required."); return false; }
+  if (val.length < 8) { if(show) showErr("pw","Password must be at least 8 characters."); return false; }
+  if (!/[A-Z]/.test(val)) { if(show) showErr("pw","Include at least one uppercase letter."); return false; }
+  if (!/[0-9]/.test(val)) { if(show) showErr("pw","Include at least one number."); return false; }
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(val)) {
+    if(show) showErr("pw","Include at least one special character."); return false; }
+  markOk("pw"); return true;
+}
+
+function validatePw2(show=true) {
+  const pw  = document.getElementById("reg-pw").value;
+  const pw2 = document.getElementById("reg-pw2").value;
+  if (!pw2) { if(show) showErr("pw2","Please confirm your password."); return false; }
+  if (pw !== pw2) { if(show) showErr("pw2","Passwords do not match."); return false; }
+  markOk("pw2"); return true;
+}
+
+function validateCity(show=true) {
+  const val = document.getElementById("reg-city").value;
+  if (!val) { if(show) showErr("city","Please select a home city."); return false; }
+  clearErr("city"); return true;
+}
+
+function validateTerms(show=true) {
+  const checked = document.getElementById("reg-terms").checked;
+  if (!checked) { if(show) showErr("terms","You must accept the Terms of Service to continue."); return false; }
+  clearErr("terms"); return true;
+}
+
+function updatePasswordStrength(pw) {
+  const fill  = document.getElementById("pw-fill");
+  const label = document.getElementById("pw-label");
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (pw.length >= 12) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+
+  const levels = [
+    { pct:"0%",   color:"transparent", text:"Enter a password" },
+    { pct:"20%",  color:"#ef5350",     text:"Very weak" },
+    { pct:"40%",  color:"#ff7043",     text:"Weak" },
+    { pct:"60%",  color:"#ffb74d",     text:"Fair" },
+    { pct:"80%",  color:"#66bb6a",     text:"Strong" },
+    { pct:"100%", color:"#4fc3f7",     text:"Very strong ✓" },
+  ];
+  const l = levels[Math.min(score, 5)];
+  fill.style.width = l.pct;
+  fill.style.background = l.color;
+  label.textContent = l.text;
+  label.style.color = l.color === "transparent" ? "var(--muted)" : l.color;
+}
+
+// Step navigation
+function goStep(n) {
+  // Validate current step before advancing
+  const current = parseInt(document.querySelector(".reg-step:not([style*='display: none'])").id.split("-")[1]);
+
+  if (n > current) {
+    let valid = true;
+    if (current === 1) {
+      const ok1 = validateName(document.getElementById("reg-fname").value.trim(),"fname","First name");
+      const ok2 = validateName(document.getElementById("reg-lname").value.trim(),"lname","Last name");
+      const ok3 = validateDob();
+      const ok4 = validateGender();
+      valid = ok1 && ok2 && ok3 && ok4;
+    } else if (current === 2) {
+      const ok1 = validateUsername();
+      const ok2 = validateEmail(document.getElementById("reg-email").value.trim());
+      const ok3 = validatePhone(document.getElementById("reg-phone").value.trim());
+      valid = ok1 && ok2 && ok3;
+    }
+    if (!valid) return;
+  }
+
+  // Switch step
+  document.querySelectorAll(".reg-step").forEach(s => s.style.display = "none");
+  document.getElementById("step-"+n).style.display = "block";
+
+  // Update progress dots
+  for (let i = 1; i <= 3; i++) {
+    const dot = document.getElementById("dot-"+i);
+    dot.classList.remove("active","done");
+    if (i < n) dot.classList.add("done");
+    else if (i === n) dot.classList.add("active");
+  }
+}
+
+function submitRegistration() {
+  const okPw   = validatePw();
+  const okPw2  = validatePw2();
+  const okCity = validateCity();
+  const okTrms = validateTerms();
+
+  if (!okPw || !okPw2 || !okCity || !okTrms) return;
+
+  // Collect data
+  const regData = {
+    firstName: document.getElementById("reg-fname").value.trim(),
+    lastName:  document.getElementById("reg-lname").value.trim(),
+    dob:       document.getElementById("reg-dob").value,
+    gender:    document.getElementById("reg-gender").value,
+    username:  document.getElementById("reg-username").value.trim(),
+    email:     document.getElementById("reg-email").value.trim(),
+    phone:     document.getElementById("reg-phone").value.trim(),
+    homeCity:  document.getElementById("reg-city").value,
+  };
+
+  // Simulate submission
+  const btn = document.getElementById("reg-submit-btn");
+  btn.disabled = true;
+  btn.textContent = "Creating account…";
+
+  setTimeout(() => {
+    document.getElementById("reg-form-wrap").style.display = "none";
+    document.getElementById("reg-success").classList.add("show");
+    // Update progress dots to all done
+    for (let i = 1; i <= 3; i++) {
+      const dot = document.getElementById("dot-"+i);
+      dot.classList.remove("active");
+      dot.classList.add("done");
+    }
+    console.log("Registered user:", regData);
+  }, 1200);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+window.addEventListener("load", () => {
+  renderAtlas();
+  if (navigator.geolocation) {
+    showLoader();
+    navigator.geolocation.getCurrentPosition(
+      pos => fetchByCoords(pos.coords.latitude, pos.coords.longitude),
+      () => fetchByCity("Mumbai"),
+      { timeout: 6000 }
+    );
+  } else { fetchByCity("Mumbai"); }
+});
+
+window.addEventListener("resize", () => {
+  if (document.getElementById("view-gapminder").classList.contains("active")) buildChart();
+});
+</script>
+<!-- ============================================================
+     REACT WEATHER STATS COMPONENT
+     ============================================================ -->
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// Animated number hook — counts from old value to new
+function useAnimatedValue(target, duration = 800) {
+  const [display, setDisplay] = useState(target);
+  const frame = useRef(null);
+  const start = useRef(null);
+  const from  = useRef(target);
+
+  useEffect(() => {
+    const to = parseFloat(target);
+    if (isNaN(to)) { setDisplay(target); return; }
+    const fromVal = parseFloat(from.current) || 0;
+    if (frame.current) cancelAnimationFrame(frame.current);
+    start.current = null;
+
+    const step = (ts) => {
+      if (!start.current) start.current = ts;
+      const progress = Math.min((ts - start.current) / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      const cur = fromVal + (to - fromVal) * ease;
+      setDisplay(Number.isInteger(to) ? Math.round(cur) : cur.toFixed(1));
+      if (progress < 1) frame.current = requestAnimationFrame(step);
+      else { from.current = target; }
+    };
+    frame.current = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame.current);
+  }, [target]);
+
+  return display;
+}
+
+// Circular ring tile
+function RingTile({ label, value, unit, max, color, icon, formatVal }) {
+  const R = 18, C = 2 * Math.PI * R;
+  const pct = Math.min(parseFloat(value) / max, 1) || 0;
+  const animated = useAnimatedValue(value);
+  const [prevVal, setPrevVal] = useState(value);
+  const [entering, setEntering] = useState(false);
+
+  useEffect(() => {
+    if (value !== prevVal) {
+      setEntering(true);
+      setPrevVal(value);
+      const t = setTimeout(() => setEntering(false), 400);
+      return () => clearTimeout(t);
+    }
+  }, [value]);
+
+  const displayVal = formatVal ? formatVal(animated) : animated;
+
+  return (
+    <div className="rs-tile" style={{ '--tile-color': color }}>
+      <div className="rs-tile-glow" style={{ background: `radial-gradient(circle at 50% 120%, ${color}22 0%, transparent 70%)` }} />
+      <div className="rs-ring-wrap">
+        <svg className="rs-ring" width="44" height="44" viewBox="0 0 44 44">
+          <circle className="rs-ring-track" cx="22" cy="22" r={R} strokeWidth="3" />
+          <circle
+            className="rs-ring-fill"
+            cx="22" cy="22" r={R}
+            strokeWidth="3"
+            stroke={color}
+            strokeDasharray={C}
+            strokeDashoffset={C - pct * C}
+          />
+        </svg>
+        <span style={{ position:'absolute', fontSize:'0.6rem', fontFamily:"'DM Mono',monospace", color }}>{icon}</span>
+      </div>
+      <div className="rs-label">{label}</div>
+      <div className={`rs-val ${entering ? 'rs-val-enter' : ''}`} style={{ color }}>
+        {displayVal}
+      </div>
+      <div className="rs-unit">{unit}</div>
+    </div>
+  );
+}
+
+// Wind compass tile
+function WindTile({ speed, unit: windUnit, deg }) {
+  const animated = useAnimatedValue(speed);
+  const dirs = ["N","NE","E","SE","S","SW","W","NW"];
+  const dirLabel = dirs[Math.round(deg / 45) % 8];
+
+  return (
+    <div className="rs-tile">
+      <div className="rs-tile-glow" style={{ background: 'radial-gradient(circle at 50% 120%, rgba(129,199,132,0.15) 0%, transparent 70%)' }} />
+      <div className="rs-compass-wrap">
+        <div className="rs-compass">
+          <div className="rs-compass-arrow" style={{ transform: `rotate(${deg}deg)` }} />
+          <div className="rs-compass-dot" />
+        </div>
+      </div>
+      <div className="rs-label">Wind</div>
+      <div className="rs-val" style={{ color: '#81c784' }}>{animated}</div>
+      <div className="rs-unit">{windUnit} · {dirLabel}</div>
+    </div>
+  );
+}
+
+// Main WeatherStats component
+function WeatherStats({ stats }) {
+  if (!stats) return null;
+
+  return (
+    <div>
+      <div className="rs-grid">
+        <RingTile
+          label="Humidity"
+          value={stats.humidity}
+          unit="%"
+          max={100}
+          color="#4fc3f7"
+          icon="💧"
+        />
+        <WindTile
+          speed={stats.wind}
+          unit={stats.windUnit}
+          deg={stats.windDeg}
+        />
+        <RingTile
+          label="Visibility"
+          value={stats.visibility ?? '—'}
+          unit="km"
+          max={10}
+          color="#ce93d8"
+          icon="👁"
+          formatVal={v => isNaN(v) ? '—' : v}
+        />
+        <RingTile
+          label="Pressure"
+          value={stats.pressure}
+          unit="hPa"
+          max={1050}
+          color="#ffb74d"
+          icon="⬆"
+          formatVal={v => Math.round(v)}
+        />
+        <RingTile
+          label="Cloud Cover"
+          value={stats.clouds}
+          unit="%"
+          max={100}
+          color="#90a4ae"
+          icon="☁"
+        />
+        {/* placeholder 6th tile — UV or AQI hint */}
+        <div className="rs-tile" style={{ display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center', gap:'4px' }}>
+          <div style={{ fontSize:'1.4rem' }}>🌡</div>
+          <div className="rs-label">Feels real</div>
+          <div className="rs-val" style={{ color:'var(--accent2)', fontSize:'0.78rem', fontFamily:"'Space Grotesk',sans-serif", fontWeight:600 }}>
+            {stats.clouds > 70 ? 'Overcast' : stats.humidity > 80 ? 'Muggy' : stats.humidity < 40 ? 'Dry' : 'Comfortable'}
+          </div>
+        </div>
+      </div>
+
+      {/* Sunrise / Sunset */}
+      <div className="rs-sun-row">
+        <div className="rs-sun-tile">
+          <div className="rs-sun-icon">🌅</div>
+          <div>
+            <div className="rs-sun-label">Sunrise</div>
+            <div className="rs-sun-time">{stats.sunrise}</div>
+          </div>
+        </div>
+        <div className="rs-sun-tile">
+          <div className="rs-sun-icon">🌇</div>
+          <div>
+            <div className="rs-sun-label">Sunset</div>
+            <div className="rs-sun-time">{stats.sunset}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Global root ref so we can re-render on weather updates
+let _reactRoot = null;
+
+window.renderReactStats = function(stats) {
+  const container = document.getElementById("react-stats-root");
+  if (!container) return;
+  if (!_reactRoot) {
+    _reactRoot = ReactDOM.createRoot(container);
+  }
+  _reactRoot.render(React.createElement(WeatherStats, { stats }));
+};
+</script>
+
+</body>
+</html>
